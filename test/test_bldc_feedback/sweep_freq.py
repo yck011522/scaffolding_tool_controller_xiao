@@ -7,8 +7,12 @@ runs a full duty cycle sweep (0-100%). Saves results to CSV and
 generates a response plot.
 
 Usage:
+    .venv\Scripts\activate   
+    cd test\test_bldc_feedback
+
     python sweep_freq.py [COM_PORT]
     python sweep_freq.py COM5
+    python sweep_freq.py COM5 56
 """
 
 import sys
@@ -21,7 +25,7 @@ import matplotlib.pyplot as plt
 PORT = sys.argv[1] if len(sys.argv) > 1 else "COM5"
 BAUD = 115200
 FREQUENCIES = [5000, 10000, 15000, 20000, 25000]
-GEAR_RATIO = 56
+GEAR_RATIO = sys.argv[2] if len(sys.argv) > 2 else "56"
 TIMEOUT = 120  # seconds max per sweep
 
 def send_cmd(ser, cmd):

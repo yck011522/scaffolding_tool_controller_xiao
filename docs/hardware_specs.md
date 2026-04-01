@@ -93,8 +93,12 @@ See `docs/motor_spec/` for full datasheet CSV and wiring diagrams.
 | Chip | MAX3485 |
 | Supply voltage | 3.3 V |
 | Interface | UART TX/RX + DE/RE direction control |
-| DE/RE pin | TBD (single GPIO, directly drive both) |
-| Baud rate | TBD (default 115200 for testing) |
+| TX pin | D6 (GPIO43) → MAX3485 DI (RDX on Module PCB)|
+| RX pin | D7 (GPIO44) → MAX3485 RO (TDX on Module PCB)|
+| DE/RE pin | D0 (GPIO1) → MAX3485 DE + ~RE (tied together) |
+| Baud rate | 115200 (default) |
+
+> **Label confusion:** Many MAX3485 breakout modules label the pins "TXD" and "RXD" from the module's perspective. "TXD" on the module is the receiver output (RO) — connect it to the MCU's **RX** pin (D7). "RXD" on the module is the driver input (DI) — connect it to the MCU's **TX** pin (D6). In short: module TXD → MCU RX, module RXD → MCU TX.
 
 ## Current Sensor — INA240 (preferred)
 

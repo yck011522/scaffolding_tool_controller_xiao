@@ -16,6 +16,33 @@ Ground-truth reference for component choices, voltage levels, and interface deta
 | Camera connector | DVP (on-board, replaceable module) |
 | USB | USB-C (native USB on ESP32-S3) — used for programming and debug serial |
 
+### USB-CDC Bootloader Reboot Frozen Problem
+
+The XIAO ESP32-S3 uses its **native USB peripheral** for Serial (no separate UART chip). The Arduino-ESP32 USB-CDC driver has a software callback that watches for DTR/RTS line-state transitions. When a serial monitor **closes the port**, and **if** the host sends DTR=0/RTS=0, the driver will interpret this as a request to reboot into **ROM download mode** (the same mechanism that enables PlatformIO one-click upload).
+
+**What happens:**
+
+1. Serial monitor disconnects → host drops DTR/RTS
+2. USB-CDC driver calls `usb_persist_restart(RESTART_BOOTLOADER)`
+3. A flag is set in RTC memory; the chip does a software reset
+4. ROM code reads the flag → enters USB download mode instead of running user firmware
+5. LEDC (PWM) is not initialized → motor control pin **floats** → BLDC driver may interpret this as full throttle
+6. Reconnecting a serial monitor talks to the ROM bootloader, not user firmware → **commands are ignored**
+7. Recovery requires a **physical press of the reset button**
+
+**When this is a problem:**
+- Debugging via USB serial (PlatformIO monitor, PuTTY, etc.) with DTR/RTS enabled (the default for most tools)
+- Disconnecting and reconnecting the serial monitor during testing
+
+**When this is NOT a problem:**
+- Normal robotic operation via **RS-485** — the MAX3485 transceiver uses UART1, which has no DTR/RTS mechanism. Connecting/disconnecting the RS-485 bus cannot trigger a bootloader reboot.
+- PlatformIO upload — this is the intentional use case for the DTR/RTS reset behavior.
+
+**Workaround for debugging:**
+- When debugging from serial monitor, **disable DTR and RTS** before connecting (most tools have a checkbox or config option for this).
+- if using PlatformIO serial monitor, add `monitor_dtr = 0` and `monitor_rts = 0` to the relevant `[env]` in `platformio.ini`.
+- In pyserial (Python scripts), open the port with `dsrdtr=False, rtscts=False` (the default), and avoid toggling `ser.dtr` or `ser.rts`.
+
 ### Grove Shield Connector Map
 
 | Connector | Pin A | Pin B | Intended use |

@@ -1,8 +1,13 @@
 // Minimal camera HTTP server for XIAO ESP32S3 Sense.
 //
 // Serves two endpoints on port 80:
-//   /capture  — single JPEG snapshot
-//   /stream   — MJPEG stream (multipart/x-mixed-replace)
+//   /capture  — single JPEG snapshot (LED on during capture+send, then off)
+//   /stream   — MJPEG stream (LED on while streaming, off when client disconnects)
+//
+// The camera outputs native JPEG frames, so no pixel-format conversion is
+// needed.  Each MJPEG frame is sent as a separate "part" in a
+// multipart/x-mixed-replace HTTP response — the browser (or Python client)
+// simply receives a continuous series of JPEG images.
 //
 // Derived from the Espressif CameraWebServer example.
 // Face detection, browser control UI, and register-twiddling
@@ -16,38 +21,38 @@
 #include "esp_timer.h"
 #include "esp_camera.h"
 #include "img_converters.h"
-#include "esp32-hal-ledc.h"
 #include <Arduino.h>
+#include "camera_pins.h"
 
 // ---------------------------------------------------------------------------
-// LED flash (XIAO ESP32S3 Sense has on-board LED on GPIO 21)
+// LED indicator (on-board LED on GPIO 21, simple digital on/off)
+// Used to signal activity: lights up during capture sends and streaming.
 // ---------------------------------------------------------------------------
-#define LED_LEDC_CHANNEL 2
-#define LED_MAX_INTENSITY 255
-
-static int led_duty = 0;
-static bool isStreaming = false;
-
-static void enable_led(bool en)
-{
-    int duty = en ? led_duty : 0;
-    if (en && isStreaming && (led_duty > LED_MAX_INTENSITY))
-        duty = LED_MAX_INTENSITY;
-    ledcWrite(LED_LEDC_CHANNEL, duty);
-}
+static void led_on()  { digitalWrite(LED_GPIO_NUM, HIGH); }
+static void led_off() { digitalWrite(LED_GPIO_NUM, LOW); }
 
 // ---------------------------------------------------------------------------
 // MJPEG stream constants
+//
+// An MJPEG stream is an HTTP response with content-type
+// "multipart/x-mixed-replace".  Each frame is separated by a boundary
+// string and has its own Content-Type / Content-Length sub-headers.
 // ---------------------------------------------------------------------------
+// Unique boundary string that separates individual JPEG frames in the stream
 #define PART_BOUNDARY "123456789000000000000987654321"
 static const char *STREAM_CONTENT_TYPE = "multipart/x-mixed-replace;boundary=" PART_BOUNDARY;
 static const char *STREAM_BOUNDARY = "\r\n--" PART_BOUNDARY "\r\n";
+// Template for the per-frame sub-header (content type, length, timestamp)
 static const char *STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %u\r\nX-Timestamp: %d.%06d\r\n\r\n";
 
 static httpd_handle_t camera_httpd = NULL;
 
 // ---------------------------------------------------------------------------
 // Running-average filter for FPS logging
+//
+// Keeps a circular buffer of the last N frame times and computes a
+// smoothed average, used only in log_i() messages when the Arduino
+// log level is INFO or higher.
 // ---------------------------------------------------------------------------
 typedef struct {
     size_t size;
@@ -87,6 +92,10 @@ static int ra_filter_run(ra_filter_t *filter, int value)
 
 // ---------------------------------------------------------------------------
 // /capture — single JPEG frame
+//
+// Grabs one frame from the camera, sends it as an HTTP response with
+// content-type image/jpeg, then returns.  The LED is on for the entire
+// duration (capture + network send) so the user can see activity.
 // ---------------------------------------------------------------------------
 static esp_err_t capture_handler(httpd_req_t *req)
 {
@@ -96,10 +105,8 @@ static esp_err_t capture_handler(httpd_req_t *req)
     int64_t fr_start = esp_timer_get_time();
 #endif
 
-    enable_led(true);
-    vTaskDelay(150 / portTICK_PERIOD_MS);  // LED needs ~150ms to be visible in frame
-    fb = esp_camera_fb_get();
-    enable_led(false);
+    led_on();                    // Turn on LED to indicate capture in progress
+    fb = esp_camera_fb_get();     // Grab one JPEG frame from the camera
 
     if (!fb)
     {
@@ -110,8 +117,9 @@ static esp_err_t capture_handler(httpd_req_t *req)
 
     httpd_resp_set_type(req, "image/jpeg");
     httpd_resp_set_hdr(req, "Content-Disposition", "inline; filename=capture.jpg");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");  // Allow cross-origin requests
 
+    // Embed the camera's hardware timestamp in a custom header
     char ts[32];
     snprintf(ts, 32, "%ld.%06ld", fb->timestamp.tv_sec, fb->timestamp.tv_usec);
     httpd_resp_set_hdr(req, "X-Timestamp", (const char *)ts);
@@ -119,9 +127,10 @@ static esp_err_t capture_handler(httpd_req_t *req)
 #if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_INFO
     size_t fb_len = fb->len;
 #endif
-    // Camera is configured for JPEG output, so the frame is already JPEG
+    // Send the raw JPEG buffer directly — no conversion needed
     res = httpd_resp_send(req, (const char *)fb->buf, fb->len);
-    esp_camera_fb_return(fb);
+    esp_camera_fb_return(fb);     // Return the frame buffer to the camera driver
+    led_off();                    // Capture+send complete, turn LED off
 
 #if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_INFO
     int64_t fr_end = esp_timer_get_time();
@@ -132,6 +141,11 @@ static esp_err_t capture_handler(httpd_req_t *req)
 
 // ---------------------------------------------------------------------------
 // /stream — MJPEG stream
+//
+// Continuously grabs frames and sends them as an MJPEG multipart response.
+// The LED stays on for the entire duration of the stream.  The loop exits
+// when a send fails (typically because the client disconnected), at which
+// point the LED is turned off.
 // ---------------------------------------------------------------------------
 static esp_err_t stream_handler(httpd_req_t *req)
 {
@@ -147,19 +161,19 @@ static esp_err_t stream_handler(httpd_req_t *req)
     if (!last_frame)
         last_frame = esp_timer_get_time();
 
+    // Set the multipart content type so the client knows to expect a stream
     res = httpd_resp_set_type(req, STREAM_CONTENT_TYPE);
     if (res != ESP_OK)
         return res;
 
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-    httpd_resp_set_hdr(req, "X-Framerate", "60");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");  // Allow cross-origin requests
+    httpd_resp_set_hdr(req, "X-Framerate", "60");                 // Hint to client
 
-    isStreaming = true;
-    enable_led(true);
+    led_on();  // LED stays on for the entire stream session
 
     while (true)
     {
-        fb = esp_camera_fb_get();
+        fb = esp_camera_fb_get();   // Grab the latest JPEG frame
         if (!fb)
         {
             log_e("Camera capture failed");
@@ -173,6 +187,10 @@ static esp_err_t stream_handler(httpd_req_t *req)
             jpg_buf = fb->buf;
         }
 
+        // Send the three parts of each MJPEG frame:
+        //   1. Boundary string (separates this frame from the previous one)
+        //   2. Per-frame sub-header (content type, length, timestamp)
+        //   3. The raw JPEG data
         if (res == ESP_OK)
             res = httpd_resp_send_chunk(req, STREAM_BOUNDARY, strlen(STREAM_BOUNDARY));
         if (res == ESP_OK)
@@ -186,11 +204,12 @@ static esp_err_t stream_handler(httpd_req_t *req)
 
         if (fb)
         {
-            esp_camera_fb_return(fb);
+            esp_camera_fb_return(fb);  // Return frame buffer to the camera driver
             fb = NULL;
             jpg_buf = NULL;
         }
 
+        // A failed send usually means the client closed the connection
         if (res != ESP_OK)
         {
             Serial.printf("[STREAM] send failed, res=%d — client likely disconnected\n", res);
@@ -211,14 +230,21 @@ static esp_err_t stream_handler(httpd_req_t *req)
     }
 
     Serial.println("[STREAM] stream ended");
-    isStreaming = false;
-    enable_led(false);
+    led_off();  // Client disconnected, turn LED off
 
     return res;
 }
 
 // ---------------------------------------------------------------------------
 // Server startup
+//
+// Creates an HTTP server on port 80 with two URI handlers.
+// - lru_purge_enable: automatically closes the oldest idle connection when
+//   the server runs out of slots, preventing lockups.
+// - send/recv_wait_timeout: 3 seconds — quickly detects dead clients so
+//   the stream handler loop can exit instead of blocking forever.
+// - stack_size: 32 KB — the stream handler's while-loop with per-frame
+//   logging needs more stack than the default 4 KB.
 // ---------------------------------------------------------------------------
 void startCameraServer()
 {
@@ -258,8 +284,4 @@ void startCameraServer()
     }
 }
 
-void setupLedFlash(int pin)
-{
-    ledcSetup(LED_LEDC_CHANNEL, 5000, 8);
-    ledcAttachPin(pin, LED_LEDC_CHANNEL);
-}
+

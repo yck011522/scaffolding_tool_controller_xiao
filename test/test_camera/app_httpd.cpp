@@ -251,6 +251,7 @@ void startCameraServer()
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.max_uri_handlers = 4;
     config.stack_size = 32768;         // Stream handler needs extra stack
+    config.core_id = 0;                // Pin HTTP server task to core 0 (free core 1 for motor control)
     config.lru_purge_enable = true;    // Purge oldest connection when full
     config.send_wait_timeout = 3;      // Detect dead clients faster (seconds)
     config.recv_wait_timeout = 3;

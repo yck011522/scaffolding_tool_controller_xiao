@@ -11,7 +11,7 @@ Usage:
 
 Requires:
     pip install opencv-python numpy
-"""
+""" 
 import cv2
 import urllib.request
 import numpy as np

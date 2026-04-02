@@ -20,33 +20,29 @@
 #include <Arduino.h>
 
 // ---------------------------------------------------------------------------
-// LED flash
+// LED flash (XIAO ESP32S3 Sense has on-board LED on GPIO 21)
 // ---------------------------------------------------------------------------
-#define CONFIG_LED_ILLUMINATOR_ENABLED 1
-
-#if CONFIG_LED_ILLUMINATOR_ENABLED
 #define LED_LEDC_CHANNEL 2
-#define CONFIG_LED_MAX_INTENSITY 255
+#define LED_MAX_INTENSITY 255
 
 static int led_duty = 0;
 static bool isStreaming = false;
 
-void enable_led(bool en)
+static void enable_led(bool en)
 {
     int duty = en ? led_duty : 0;
-    if (en && isStreaming && (led_duty > CONFIG_LED_MAX_INTENSITY))
-        duty = CONFIG_LED_MAX_INTENSITY;
+    if (en && isStreaming && (led_duty > LED_MAX_INTENSITY))
+        duty = LED_MAX_INTENSITY;
     ledcWrite(LED_LEDC_CHANNEL, duty);
 }
-#endif
 
 // ---------------------------------------------------------------------------
 // MJPEG stream constants
 // ---------------------------------------------------------------------------
 #define PART_BOUNDARY "123456789000000000000987654321"
-static const char *_STREAM_CONTENT_TYPE = "multipart/x-mixed-replace;boundary=" PART_BOUNDARY;
-static const char *_STREAM_BOUNDARY = "\r\n--" PART_BOUNDARY "\r\n";
-static const char *_STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %u\r\nX-Timestamp: %d.%06d\r\n\r\n";
+static const char *STREAM_CONTENT_TYPE = "multipart/x-mixed-replace;boundary=" PART_BOUNDARY;
+static const char *STREAM_BOUNDARY = "\r\n--" PART_BOUNDARY "\r\n";
+static const char *STREAM_PART = "Content-Type: image/jpeg\r\nContent-Length: %u\r\nX-Timestamp: %d.%06d\r\n\r\n";
 
 static httpd_handle_t camera_httpd = NULL;
 
@@ -100,14 +96,10 @@ static esp_err_t capture_handler(httpd_req_t *req)
     int64_t fr_start = esp_timer_get_time();
 #endif
 
-#if CONFIG_LED_ILLUMINATOR_ENABLED
     enable_led(true);
-    vTaskDelay(150 / portTICK_PERIOD_MS);
+    vTaskDelay(150 / portTICK_PERIOD_MS);  // LED needs ~150ms to be visible in frame
     fb = esp_camera_fb_get();
     enable_led(false);
-#else
-    fb = esp_camera_fb_get();
-#endif
 
     if (!fb)
     {
@@ -125,34 +117,12 @@ static esp_err_t capture_handler(httpd_req_t *req)
     httpd_resp_set_hdr(req, "X-Timestamp", (const char *)ts);
 
 #if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_INFO
-    size_t fb_len = 0;
+    size_t fb_len = fb->len;
 #endif
-    if (fb->format == PIXFORMAT_JPEG)
-    {
-#if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_INFO
-        fb_len = fb->len;
-#endif
-        res = httpd_resp_send(req, (const char *)fb->buf, fb->len);
-    }
-    else
-    {
-        // Convert non-JPEG frame to JPEG via chunked encoding
-        typedef struct { httpd_req_t *req; size_t len; } jpg_chunking_t;
-        jpg_chunking_t jchunk = {req, 0};
-        auto encode_cb = [](void *arg, size_t index, const void *data, size_t len) -> size_t {
-            jpg_chunking_t *j = (jpg_chunking_t *)arg;
-            if (!index) j->len = 0;
-            if (httpd_resp_send_chunk(j->req, (const char *)data, len) != ESP_OK) return 0;
-            j->len += len;
-            return len;
-        };
-        res = frame2jpg_cb(fb, 80, encode_cb, &jchunk) ? ESP_OK : ESP_FAIL;
-        httpd_resp_send_chunk(req, NULL, 0);
-#if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_INFO
-        fb_len = jchunk.len;
-#endif
-    }
+    // Camera is configured for JPEG output, so the frame is already JPEG
+    res = httpd_resp_send(req, (const char *)fb->buf, fb->len);
     esp_camera_fb_return(fb);
+
 #if ARDUHAL_LOG_LEVEL >= ARDUHAL_LOG_LEVEL_INFO
     int64_t fr_end = esp_timer_get_time();
 #endif
@@ -169,25 +139,23 @@ static esp_err_t stream_handler(httpd_req_t *req)
     camera_fb_t *fb = NULL;
     struct timeval _timestamp;
     esp_err_t res = ESP_OK;
-    size_t _jpg_buf_len = 0;
-    uint8_t *_jpg_buf = NULL;
+    size_t jpg_buf_len = 0;
+    uint8_t *jpg_buf = NULL;
     char part_buf[128];
 
     static int64_t last_frame = 0;
     if (!last_frame)
         last_frame = esp_timer_get_time();
 
-    res = httpd_resp_set_type(req, _STREAM_CONTENT_TYPE);
+    res = httpd_resp_set_type(req, STREAM_CONTENT_TYPE);
     if (res != ESP_OK)
         return res;
 
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     httpd_resp_set_hdr(req, "X-Framerate", "60");
 
-#if CONFIG_LED_ILLUMINATOR_ENABLED
     isStreaming = true;
     enable_led(true);
-#endif
 
     while (true)
     {
@@ -201,45 +169,26 @@ static esp_err_t stream_handler(httpd_req_t *req)
         {
             _timestamp.tv_sec = fb->timestamp.tv_sec;
             _timestamp.tv_usec = fb->timestamp.tv_usec;
-            if (fb->format != PIXFORMAT_JPEG)
-            {
-                bool jpeg_converted = frame2jpg(fb, 80, &_jpg_buf, &_jpg_buf_len);
-                esp_camera_fb_return(fb);
-                fb = NULL;
-                if (!jpeg_converted)
-                {
-                    log_e("JPEG compression failed");
-                    res = ESP_FAIL;
-                }
-            }
-            else
-            {
-                _jpg_buf_len = fb->len;
-                _jpg_buf = fb->buf;
-            }
+            jpg_buf_len = fb->len;
+            jpg_buf = fb->buf;
         }
 
         if (res == ESP_OK)
-            res = httpd_resp_send_chunk(req, _STREAM_BOUNDARY, strlen(_STREAM_BOUNDARY));
+            res = httpd_resp_send_chunk(req, STREAM_BOUNDARY, strlen(STREAM_BOUNDARY));
         if (res == ESP_OK)
         {
-            size_t hlen = snprintf(part_buf, sizeof(part_buf), _STREAM_PART,
-                                   _jpg_buf_len, _timestamp.tv_sec, _timestamp.tv_usec);
+            size_t hlen = snprintf(part_buf, sizeof(part_buf), STREAM_PART,
+                                   jpg_buf_len, _timestamp.tv_sec, _timestamp.tv_usec);
             res = httpd_resp_send_chunk(req, part_buf, hlen);
         }
         if (res == ESP_OK)
-            res = httpd_resp_send_chunk(req, (const char *)_jpg_buf, _jpg_buf_len);
+            res = httpd_resp_send_chunk(req, (const char *)jpg_buf, jpg_buf_len);
 
         if (fb)
         {
             esp_camera_fb_return(fb);
             fb = NULL;
-            _jpg_buf = NULL;
-        }
-        else if (_jpg_buf)
-        {
-            free(_jpg_buf);
-            _jpg_buf = NULL;
+            jpg_buf = NULL;
         }
 
         if (res != ESP_OK)
@@ -255,18 +204,15 @@ static esp_err_t stream_handler(httpd_req_t *req)
         uint32_t avg_frame_time = ra_filter_run(&ra_filter, frame_time);
 #endif
         log_i("MJPG: %uB %ums (%.1ffps), AVG: %ums (%.1ffps)",
-              (uint32_t)(_jpg_buf_len),
+              (uint32_t)(jpg_buf_len),
               (uint32_t)frame_time, 1000.0 / (uint32_t)frame_time,
               avg_frame_time, 1000.0 / avg_frame_time);
         last_frame = fr_end;
     }
 
     Serial.println("[STREAM] stream ended");
-
-#if CONFIG_LED_ILLUMINATOR_ENABLED
     isStreaming = false;
     enable_led(false);
-#endif
 
     return res;
 }
@@ -278,9 +224,9 @@ void startCameraServer()
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.max_uri_handlers = 4;
-    config.stack_size = 32768;
-    config.lru_purge_enable = true;   // Purge oldest connection when full
-    config.send_wait_timeout = 3;     // Detect dead clients faster (seconds)
+    config.stack_size = 32768;         // Stream handler needs extra stack
+    config.lru_purge_enable = true;    // Purge oldest connection when full
+    config.send_wait_timeout = 3;      // Detect dead clients faster (seconds)
     config.recv_wait_timeout = 3;
 
     httpd_uri_t capture_uri = {
@@ -288,9 +234,6 @@ void startCameraServer()
         .method = HTTP_GET,
         .handler = capture_handler,
         .user_ctx = NULL
-#ifdef CONFIG_HTTPD_WS_SUPPORT
-        , .is_websocket = true, .handle_ws_control_frames = false, .supported_subprotocol = NULL
-#endif
     };
 
     httpd_uri_t stream_uri = {
@@ -298,9 +241,6 @@ void startCameraServer()
         .method = HTTP_GET,
         .handler = stream_handler,
         .user_ctx = NULL
-#ifdef CONFIG_HTTPD_WS_SUPPORT
-        , .is_websocket = true, .handle_ws_control_frames = false, .supported_subprotocol = NULL
-#endif
     };
 
     ra_filter_init(&ra_filter, 20);
@@ -320,10 +260,6 @@ void startCameraServer()
 
 void setupLedFlash(int pin)
 {
-#if CONFIG_LED_ILLUMINATOR_ENABLED
     ledcSetup(LED_LEDC_CHANNEL, 5000, 8);
     ledcAttachPin(pin, LED_LEDC_CHANNEL);
-#else
-    log_i("LED flash is disabled -> CONFIG_LED_ILLUMINATOR_ENABLED = 0");
-#endif
 }

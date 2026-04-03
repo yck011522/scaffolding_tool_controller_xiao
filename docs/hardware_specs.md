@@ -6,19 +6,18 @@ Ground-truth reference for component choices, voltage levels, and interface deta
 
 | Parameter | Value |
 |---|---|
-| Board | Seeed Studio XIAO ESP32-S3 Sense |
+| Board | Waveshare ESP32-S3-Tiny |
 | MCU | ESP32-S3 (dual-core Xtensa LX7, 240 MHz) |
-| Flash | 8 MB |
-| PSRAM | 8 MB (OPI) |
+| Flash | TBD (check module datasheet) |
+| PSRAM | TBD (check module datasheet) |
 | GPIO voltage | 3.3 V |
-| ADC | 12-bit, ADC1 channels available on GPIO1–10 (ADC2 conflicts with Wi-Fi) |
-| Breakout | Grove Shield for XIAO — provides 8× Grove connectors |
-| Camera connector | DVP (on-board, replaceable module) |
+| ADC | 12-bit, ADC1 channels (ADC2 conflicts with Wi-Fi) |
+| GPIO count | 18 exposed + TX/RX |
 | USB | USB-C (native USB on ESP32-S3) — used for programming and debug serial |
 
 ### USB-CDC Bootloader Reboot Frozen Problem
 
-The XIAO ESP32-S3 uses its **native USB peripheral** for Serial (no separate UART chip). The Arduino-ESP32 USB-CDC driver has a software callback that watches for DTR/RTS line-state transitions. When a serial monitor **closes the port**, and **if** the host sends DTR=0/RTS=0, the driver will interpret this as a request to reboot into **ROM download mode** (the same mechanism that enables PlatformIO one-click upload).
+The ESP32-S3 uses its **native USB peripheral** for Serial (no separate UART chip). The Arduino-ESP32 USB-CDC driver has a software callback that watches for DTR/RTS line-state transitions. When a serial monitor **closes the port**, and **if** the host sends DTR=0/RTS=0, the driver will interpret this as a request to reboot into **ROM download mode** (the same mechanism that enables PlatformIO one-click upload).
 
 **What happens:**
 
@@ -43,22 +42,10 @@ The XIAO ESP32-S3 uses its **native USB peripheral** for Serial (no separate UAR
 - if using PlatformIO serial monitor, add `monitor_dtr = 0` and `monitor_rts = 0` to the relevant `[env]` in `platformio.ini`.
 - In pyserial (Python scripts), open the port with `dsrdtr=False, rtscts=False` (the default), and avoid toggling `ser.dtr` or `ser.rts`.
 
-### Grove Shield Connector Map
+### Pin Map
 
-| Connector | Pin A | Pin B | Intended use |
-|---|---|---|---|
-| 1 | D0 (GPIO1) | D1 (GPIO2) | TBD |
-| 2 | D1 (GPIO2) | D2 (GPIO3) | TBD |
-| 3 | D2 (GPIO3) | D3 (GPIO4) | TBD |
-| 4 | D4 (GPIO5) / SDA | D5 (GPIO6) / SCL | OLED display (I2C) |
-| 5 | D4 (GPIO5) / SDA | D5 (GPIO6) / SCL | (duplicate of connector 4) |
-| 6 | D6 (GPIO43) / TX | D7 (GPIO44) / RX | RS-485 transceiver |
-| 7 | D8 (GPIO7) | D9 (GPIO8) | TBD |
-| 8 | D9 (GPIO8) | D10 (GPIO9) | TBD |
-
-> **Note:** Pin mapping (Dn → GPIOn) needs verification against the actual XIAO ESP32-S3 Sense pinout. The above is a starting assumption.
-
-Additional solder pads: D11, D12 available on top of the camera module.
+TBD — to be populated once the Waveshare ESP32-S3-Tiny datasheet is reviewed.
+18 GPIO pins + TX/RX are exposed. Pin-to-GPIO mapping and ADC channel assignments need verification.
 
 ## BLDC Motor — JGB37-3650-2480
 
@@ -133,7 +120,7 @@ Fallback: INA219 (I2C, shares bus with OLED) — use if pin budget is too tight.
 | Interface | I2C (SDA/SCL) |
 | I2C address | 0x3C (7-bit) / 0x78 (8-bit, module selector) |
 | Supply voltage | 3.3 V (only) |
-| Wiring | SDA → D4 (GPIO5), SCL → D5 (GPIO6), Grove connector 4 |
+| Wiring | SDA → TBD, SCL → TBD (pin assignment pending new board pin map) |
 
 ### Internal buffer vs visible area
 

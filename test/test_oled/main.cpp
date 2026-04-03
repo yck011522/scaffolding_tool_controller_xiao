@@ -1,4 +1,4 @@
-// OLED display text-size test for Seeed Studio XIAO ESP32S3 Sense.
+// OLED display text-size test.
 //
 // Cycles through different text sizes on a 0.66" SSD1306 (64x48) OLED
 // so the user can visually judge which sizes are legible.
@@ -6,13 +6,15 @@
 // Each page is shown for 5 seconds, then automatically advances.
 // The cycle repeats forever.
 //
-// Wiring (Grove connector 4 on the Shield):
-//   SDA → D4 (GPIO5)
-//   SCL → D5 (GPIO6)
+// Wiring:
+//   SDA → I2C SDA pin (GPIO TBD for Waveshare ESP32-S3-Tiny)
+//   SCL → I2C SCL pin (GPIO TBD for Waveshare ESP32-S3-Tiny)
 //   VCC → 3.3 V
 //   GND → GND
 //
 // Module address selector set to 0x78 (8-bit) = 0x3C (7-bit).
+// Note: I2C pin assignments (D4/D5) are from XIAO testing and will need
+// updating once the Waveshare pin map is finalised.
 
 #include <Arduino.h>
 #include <Wire.h>
@@ -34,7 +36,7 @@
 // 7-bit I2C address (module selector at 0x78 → 0x3C in Arduino Wire)
 #define OLED_ADDR 0x3C
 
-// I2C pins on Grove connector 4
+// I2C pins (from XIAO testing — update needed for Waveshare board)
 #define I2C_SDA D4   // GPIO5
 #define I2C_SCL D5   // GPIO6
 

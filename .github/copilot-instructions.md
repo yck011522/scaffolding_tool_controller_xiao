@@ -59,7 +59,7 @@ or similar before probing.
 ### 4. Verify with a Python script
 
 Write a Python script to a file in `scripts/` with a descriptive name
-(e.g. `scripts/verify_camera.py`, `scripts/rs485_roundtrip.py`) and run it
+(e.g. `scripts/verify_oled.py`, `scripts/rs485_roundtrip.py`) and run it
 with `python scripts/<name>.py`.  **Do not use inline `python -c "..."`.**
 
 The script should:
@@ -72,14 +72,14 @@ The script should:
   ser.rts = True; time.sleep(0.1); ser.rts = False
   ```
 - **Captures serial output** in a background thread, looking for known
-  markers (e.g. `"Camera Ready"`, `"WiFi connected"`).
+  markers (e.g. `"WiFi connected"`, `"Test complete"`).
 - **Exercises the firmware** — HTTP requests, serial commands, ADC reads,
   whatever the test requires.
 - **Prints structured results** prefixed with tags like `[SERIAL]`,
   `[CAPTURE]`, `[STREAM]`, `[OK]`, `[FAIL]` so the output is easy to parse.
 
 Keep verification scripts in `scripts/` with descriptive names
-(e.g. `camera_debug.py`, `camera_viewer.py`, `rs485_roundtrip.py`).
+(e.g. `verify_oled.py`, `rs485_roundtrip.py`).
 
 ### 5. Interpret and iterate
 

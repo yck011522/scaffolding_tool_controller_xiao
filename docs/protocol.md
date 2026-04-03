@@ -25,8 +25,6 @@ Both interfaces accept the same command format. Replies are sent back on the ori
 | TBD | Motor speed command | motor_id, direction, speed | Acknowledgement + status |
 | TBD | Motor stop | motor_id | Acknowledgement |
 | TBD | Query status | — | Motor state, current, RPM |
-| TBD | Start camera stream | — | Acknowledgement |
-| TBD | Stop camera stream | — | Acknowledgement |
 | TBD | Set current limit | threshold_mA | Acknowledgement |
 | TBD | Echo / ping | payload | Echo payload back |
 

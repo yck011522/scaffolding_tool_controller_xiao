@@ -2,7 +2,7 @@
 //
 // Board: Waveshare ESP32-S3-Tiny
 //
-// Cycles through different text sizes on a 0.66" SSD1306 (64x48) OLED
+// Cycles through different text sizes on a 0.96" SSD1306 (128x64) OLED
 // so the user can visually judge which sizes are legible.
 //
 // Each page is shown for 5 seconds, then automatically advances.
@@ -21,17 +21,10 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
-// Display dimensions — 128x64 internal buffer, but the 0.66" module only
-// shows a 64x48 pixel visible window at offset (32, 16) in the buffer.
-// The driver must be initialised with the full 128x64 size.
+// Display dimensions — 0.96" module uses the full 128x64 framebuffer.
+// No offset needed (unlike the old 0.66" module which had a 64x48 window).
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
-
-// Visible area offset — all drawing must start from here
-#define VIS_X 32
-#define VIS_Y 16
-#define VIS_W 64 // visible width in pixels
-#define VIS_H 48 // visible height in pixels
 
 // 7-bit I2C address (module selector at 0x78 → 0x3C in Arduino Wire)
 #define OLED_ADDR 0x3C
@@ -62,53 +55,63 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
 // --- Page drawing functions ---
 
-// Page 1: textSize(1) — 6x8 px per char → 10 chars × 6 lines visible
+// Page 1: textSize(1) — 6x8 px per char → 21 chars × 8 lines
 void page1()
 {
   display.setTextSize(1);
-  display.setCursor(VIS_X, VIS_Y);
-  display.println("SIZE 1 6x8");
-  display.setCursor(VIS_X, VIS_Y + 8);
-  display.println("10chr/line");
-  display.setCursor(VIS_X, VIS_Y + 16);
-  display.println("6 lines fit");
-  display.setCursor(VIS_X, VIS_Y + 24);
-  display.println("ABCDEFGHIJ");
-  display.setCursor(VIS_X, VIS_Y + 32);
-  display.println("0123456789");
-  display.setCursor(VIS_X, VIS_Y + 40);
-  display.println("!@#$%^&*()");
-  Serial.println("[OLED] Page 1: textSize(1) — 6x8px, 10 chars x 6 lines");
+  display.setCursor(0, 0);
+  display.println("SIZE 1  6x8 per char");
+  display.setCursor(0, 8);
+  display.println("21 chars per line");
+  display.setCursor(0, 16);
+  display.println("8 lines fit on scrn");
+  display.setCursor(0, 24);
+  display.println("ABCDEFGHIJKLMNOPQRSTU");
+  display.setCursor(0, 32);
+  display.println("0123456789 !@#$%^&*()");
+  display.setCursor(0, 40);
+  display.println("The quick brown fox");
+  display.setCursor(0, 48);
+  display.println("jumps over lazy dog");
+  display.setCursor(0, 56);
+  display.println("128x64 full screen!");
+  Serial.println("[OLED] Page 1: textSize(1) — 6x8px, 21 chars x 8 lines");
 }
 
-// Page 2: textSize(2) — 12x16 px per char → 5 chars × 3 lines visible
+// Page 2: textSize(2) — 12x16 px per char → 10 chars × 4 lines
 void page2()
 {
   display.setTextSize(2);
-  display.setCursor(VIS_X, VIS_Y);
-  display.println("SZ 2");
-  display.setCursor(VIS_X, VIS_Y + 16);
-  display.println("12x16");
-  display.setCursor(VIS_X, VIS_Y + 32);
-  display.println("ABCDE");
-  Serial.println("[OLED] Page 2: textSize(2) — 12x16px, 5 chars x 3 lines");
+  display.setCursor(0, 0);
+  display.println("SIZE 2");
+  display.setCursor(0, 16);
+  display.println("12x16 px");
+  display.setCursor(0, 32);
+  display.println("10chr/line");
+  display.setCursor(0, 48);
+  display.println("ABCDEFGHIJ");
+  Serial.println("[OLED] Page 2: textSize(2) — 12x16px, 10 chars x 4 lines");
 }
 
 // Page 3: mixed sizes — size 2 header + size 1 body
 void page3()
 {
   display.setTextSize(2);
-  display.setCursor(VIS_X, VIS_Y);
-  display.println("MOTOR");
+  display.setCursor(0, 0);
+  display.println("MOTOR 1");
   display.setTextSize(1);
-  display.setCursor(VIS_X, VIS_Y + 16);
-  display.println("Spd: 830Hz");
-  display.setCursor(VIS_X, VIS_Y + 24);
-  display.println("Cur: 1.2 A");
-  display.setCursor(VIS_X, VIS_Y + 32);
-  display.println("Dir: CW");
-  display.setCursor(VIS_X, VIS_Y + 40);
-  display.println("Volt: 24.1");
+  display.setCursor(0, 16);
+  display.println("Speed:   830 Hz");
+  display.setCursor(0, 24);
+  display.println("Current: 1.2 A");
+  display.setCursor(0, 32);
+  display.println("Direction: CW");
+  display.setCursor(0, 40);
+  display.println("Voltage: 24.1 V");
+  display.setCursor(0, 48);
+  display.println("Status:  Running");
+  display.setCursor(0, 56);
+  display.println("Gearbox: 1:56");
   Serial.println("[OLED] Page 3: mixed — size 2 header + size 1 body");
 }
 
@@ -116,67 +119,80 @@ void page3()
 void page4()
 {
   display.setTextSize(1);
-  display.setCursor(VIS_X, VIS_Y);
-  display.println("= STATUS =");
-  display.setCursor(VIS_X, VIS_Y + 8);
-  display.println("M1:CW  830");
-  display.setCursor(VIS_X, VIS_Y + 16);
-  display.println("M2:CCW 450");
-  display.setCursor(VIS_X, VIS_Y + 24);
-  display.println("I: 1.2A");
-  display.setCursor(VIS_X, VIS_Y + 32);
-  display.println("V: 24.1V");
-  display.setCursor(VIS_X, VIS_Y + 40);
-  display.println("WiFi:OK");
-  Serial.println("[OLED] Page 4: size 1, 6-line status layout");
+  display.setCursor(0, 0);
+  display.println("====== STATUS =======");
+  display.setCursor(0, 8);
+  display.println("M1: CW   830 Hz");
+  display.setCursor(0, 16);
+  display.println("M2: CCW  450 Hz");
+  display.setCursor(0, 24);
+  display.println("Current: 1.2 A");
+  display.setCursor(0, 32);
+  display.println("Voltage: 24.1 V");
+  display.setCursor(0, 40);
+  display.println("RS-485:  Connected");
+  display.setCursor(0, 48);
+  display.println("Btns: 0 0 0 0");
+  display.setCursor(0, 56);
+  display.println("Uptime: 00:12:34");
+  Serial.println("[OLED] Page 4: size 1, 8-line status layout");
 }
 
-// Page 5: size 1, max fill — all 60 character slots
+// Page 5: size 1, max fill — all 168 character slots (21x8)
 void page5()
 {
   display.setTextSize(1);
-  display.setCursor(VIS_X, VIS_Y);
-  display.print("ABCDEFGHIJ");
-  display.setCursor(VIS_X, VIS_Y + 8);
-  display.print("KLMNOPQRST");
-  display.setCursor(VIS_X, VIS_Y + 16);
-  display.print("UVWXYZ0123");
-  display.setCursor(VIS_X, VIS_Y + 24);
-  display.print("4567890abc");
-  display.setCursor(VIS_X, VIS_Y + 32);
-  display.print("defghijklm");
-  display.setCursor(VIS_X, VIS_Y + 40);
-  display.print("nopqrstuvw");
-  Serial.println("[OLED] Page 5: size 1, max fill — 60 chars (10x6)");
+  display.setCursor(0, 0);
+  display.print("ABCDEFGHIJKLMNOPQRSTU");
+  display.setCursor(0, 8);
+  display.print("VWXYZabcdefghijklmnop");
+  display.setCursor(0, 16);
+  display.print("qrstuvwxyz0123456789!");
+  display.setCursor(0, 24);
+  display.print("@#$%^&*()-=_+[]{}|;:");
+  display.setCursor(0, 32);
+  display.print("'\",./<>?`~ ABCDEFGH");
+  display.setCursor(0, 40);
+  display.print("IJKLMNOPQRSTUVWXYZ012");
+  display.setCursor(0, 48);
+  display.print("3456789abcdefghijklmn");
+  display.setCursor(0, 56);
+  display.print("opqrstuvwxyz!@#$%^&*(");
+  Serial.println("[OLED] Page 5: size 1, max fill — 168 chars (21x8)");
 }
 
-// Page 6: textSize(3) — 18x24 px per char → 3 chars × 2 lines visible
+// Page 6: textSize(3) — 18x24 px per char → 7 chars × 2 lines
 void page6()
 {
   display.setTextSize(3);
-  display.setCursor(VIS_X, VIS_Y);
-  display.println("CW");
-  display.setCursor(VIS_X, VIS_Y + 24);
-  display.println("1.2");
-  Serial.println("[OLED] Page 6: textSize(3) — 18x24px, 3 chars x 2 lines");
+  display.setCursor(0, 0);
+  display.println("1.2 A");
+  display.setCursor(0, 24);
+  display.println("830 Hz");
+  display.setTextSize(1);
+  display.setCursor(0, 56);
+  display.println("Motor 1  CW  Running");
+  Serial.println("[OLED] Page 6: textSize(3) — 18x24px, 7 chars x 2 lines");
 }
 
 // Page 7: size 2 numbers — for large readouts
 void page7()
 {
   display.setTextSize(2);
-  display.setCursor(VIS_X, VIS_Y);
-  display.println("1.2A");
-  display.setTextSize(1);
-  display.setCursor(VIS_X, VIS_Y + 16);
-  display.println("Motor Cur.");
-  display.setCursor(VIS_X, VIS_Y + 24);
+  display.setCursor(0, 0);
+  display.println("1.2 A");
+  display.setCursor(0, 16);
   display.println("830 Hz");
-  display.setCursor(VIS_X, VIS_Y + 32);
-  display.println("Dir: CW");
-  display.setCursor(VIS_X, VIS_Y + 40);
-  display.println("24.1V OK");
-  Serial.println("[OLED] Page 7: size 2 number + size 1 labels");
+  display.setTextSize(1);
+  display.setCursor(0, 32);
+  display.println("Motor Current");
+  display.setCursor(0, 40);
+  display.println("Feedback Frequency");
+  display.setCursor(0, 48);
+  display.println("Direction: CW");
+  display.setCursor(0, 56);
+  display.println("Voltage: 24.1 V  OK");
+  Serial.println("[OLED] Page 7: size 2 numbers + size 1 labels");
 }
 
 typedef void (*PageFunc)();

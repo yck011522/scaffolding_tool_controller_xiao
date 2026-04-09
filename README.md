@@ -13,7 +13,7 @@ The controller sits at the UR5e tool flange and manages the following:
 | **Motor Feedback** | Hall-effect / sensorless feedback from BLDC drivers | Digital input (interrupt) | 6 pulses per revolution; used for speed estimation and stall detection |
 | **Current Sensing** | INA219 (or INA240) on shared 24 V rail | I2C (INA219) or analog (INA240) | Single sensor monitors total 24 V intake for both motors; current budget ~1–2 A at 24 V |
 | **Manual Override** | 4× momentary push buttons | GPIO digital input | Two per motor (tighten / loosen); active while held; overrides upper-level commands |
-| **Status Display** | 0.66″ SSD1306 OLED | I2C (SDA/SCL via Grove connector) | Shows current state and information to the operator; 3.3 V compatible |
+| **Status Display** | 0.96″ SSD1306 OLED (128×64) | I2C (SDA/SCL via Grove connector) | Shows current state and information to the operator; 3.3 V compatible |
 | **Camera** | *(separate module — see `scaffolding_camera_controller` repo)* | — | Standalone XIAO ESP32-S3 Sense with always-on MJPEG streaming; independent housing and power |
 
 ## Power Architecture

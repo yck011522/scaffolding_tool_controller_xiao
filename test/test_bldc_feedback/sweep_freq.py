@@ -1,7 +1,7 @@
 """
 Auto-sweep PWM frequency and duty cycle for BLDC feedback test.
 
-Connects to the XIAO ESP32-S3 running test_bldc_feedback firmware,
+Connects to the ESP32-S3 running test_bldc_feedback firmware,
 sweeps PWM frequencies from 5 kHz to 25 kHz, and at each frequency
 runs a full duty cycle sweep (0-100%). Saves results to CSV and
 generates a response plot.

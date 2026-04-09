@@ -9,10 +9,12 @@
 ## Setup
 
 - MCU: XIAO ESP32-S3 Sense, powered via USB-C
-- PWM output: D10, direction: D9
+- PWM output: D10 (GPIO6), direction: D9 (GPIO5)
 - Motor powered from bench 24 V DC supply
 - Common GND between ESP32 and 24 V supply
 - 4.7 kΩ pull-down resistor on D10 (PWM pin to GND)
+
+> **S3-Tiny note (2026-04-09):** This test was not re-run separately on the Waveshare ESP32-S3-Tiny. PWM drive is exercised and validated by the BLDC feedback test (`test_bldc_feedback`) and current test (`test_ina_current`), both of which passed on the S3-Tiny with identical results.
 
 ## Findings
 

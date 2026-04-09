@@ -1,7 +1,7 @@
 """
 Auto-sweep PWM duty cycle and log motor RPM + current draw.
 
-Connects to the XIAO ESP32-S3 running test_ina_current firmware.
+Connects to the ESP32-S3 running test_ina_current firmware.
 Sweeps PWM 0→100% in 5% steps, records RPM and INA240 current at each step.
 Saves CSV and generates a dual-axis plot.
 

@@ -115,15 +115,34 @@ See `docs/motor_spec/` for full datasheet CSV and wiring diagrams.
 
 > **Label confusion:** Many MAX3485 breakout modules label the pins "TXD" and "RXD" from the module's perspective. "TXD" on the module is the receiver output (RO) — connect it to the MCU's **RX** pin (GPIO44). "RXD" on the module is the driver input (DI) — connect it to the MCU's **TX** pin (GPIO43). In short: module TXD → MCU RX, module RXD → MCU TX.
 
-## Current Sensor — INA240 (preferred)
+## Current Sensor — INA240A1
 
 | Parameter | Value |
 |---|---|
 | Type | High-side current-sense amplifier |
+| Variant | INA240A1 (×20 gain) |
 | Output | Analog voltage (read with ESP32 ADC) |
 | Common-mode range | Up to 80 V (suitable for 24 V rail) |
-| Gain variants | A1 (×20), A2 (×50), A3 (×100), A4 (×200) — TBD which variant |
+| Shunt resistor | 100 mΩ |
 | ADC pin | GPIO13 |
+
+### Bidirectional offset — effective range is halved
+
+The INA240A1 is a **bidirectional** amplifier. Its output rests at VCC/2 ≈ 1.65 V at zero current, swinging up for positive current and down for negative. Since we only measure current in one direction, **half the ADC range is wasted on the negative side**.
+
+| Parameter | Value |
+|---|---|
+| Zero-current output | ~1.65 V (VCC/2) |
+| ADC full scale | 3.1 V (ESP32 ADC1) |
+| Usable voltage swing | 3.1 − 1.65 = **1.45 V** |
+| Maximum measurable current | 1450 mV / (20 × 0.1 Ω) = **~725 mA** theoretical |
+| Observed ceiling | **~800 mA** (sensor output hits ADC rail) |
+
+The firmware calibrates out the 1.65 V offset at power-on (20 readings, 1 s), so displayed current reads correctly from 0 mA up to the ~800 mA ceiling. Beyond that, readings saturate.
+
+This is adequate for current-limited motor control at 330 mA (tighten) and 900 mA targets below the ceiling. For higher current ranges, possible future fixes:
+- Shift the INA240 reference voltage (REF pin) to use more of the positive swing
+- Replace the 100 mΩ shunt with 50 mΩ (doubles range to ~1650 mA, halves resolution)
 
 Fallback: INA219 (I2C, shares bus with OLED) — use if pin budget is too tight.
 
